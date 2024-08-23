@@ -1,0 +1,71 @@
+.resume-upload {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 2rem;
+    background-color: var(--white);
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .resume-upload h2 {
+    color: var(--primary-black);
+    margin-bottom: 1rem;
+  }
+  
+  
+  .privacy-notice {
+    background-color: var(--off-white);
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1rem;
+  }
+  
+  .privacy-notice h3 {
+    color: var(--secondary-black);
+    margin-top: 0;
+  }
+  
+  .file-input {
+    margin-bottom: 1rem;
+  }
+  
+  .file-label {
+    background-color: var(--secondary-black);
+    color: var(--white);
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .file-name {
+    margin-left: 1rem;
+  }
+  
+  input[type="file"] {
+    display: none;
+  }
+  
+  .privacy-agreement {
+    margin-bottom: 1rem;
+  }
+  
+
+  button[type="submit"] {
+    background-color: var(--primary-black);
+    color: var(--white);
+    padding: 0.8rem 1.5rem;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s;
+  }
+  
+  button[type="submit"]:hover {
+    background-color: var(--secondary-black);
+  }
+  
+  
+  button[type="submit"]:disabled {
+    background-color: var(--medium-gray);
+    cursor: not-allowed;
+  }
