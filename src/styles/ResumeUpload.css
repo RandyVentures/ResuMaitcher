@@ -70,3 +70,22 @@ button[type="submit"]:disabled {
   background-color: var(--medium-gray);
   cursor: not-allowed;
 }
+
+.result {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: var(--off-white);
+  border-radius: 5px;
+}
+
+.result h3 {
+  color: var(--primary-black);
+}
+
+.result .error {
+  color: red;
+}
+
+.result ul {
+  padding-left: 20px;
+}
