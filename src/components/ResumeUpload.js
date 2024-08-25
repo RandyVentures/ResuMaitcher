@@ -16,7 +16,7 @@ function ResumeUpload() {
     if (file && privacyAgreed) {
       // Handle file upload logic here
       console.log('File uploaded:', file.name);
-      // You would typically send the file to your server here
+      // let file get handled by python script - AI score it and then find best matching job postings
     }
   };
 
