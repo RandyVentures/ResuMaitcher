@@ -6,15 +6,17 @@ function ResumeUpload() {
   const [privacyAgreed, setPrivacyAgreed] = useState(false);
 
   const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+    if (e.target.files[0]) {
+      setFile(e.target.files[0]);
+    }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (file && privacyAgreed) {
-      // Here you would handle the file upload and processing
+      // Handle file upload logic here
       console.log('File uploaded:', file.name);
-      // Implement API call to backend for processing
+      // let file get handled by python script - AI score it and then find best matching job postings
     }
   };
 
@@ -28,7 +30,18 @@ function ResumeUpload() {
            We do not share your data with any third parties.</p>
       </div>
       <form onSubmit={handleSubmit}>
-        <input type="file" onChange={handleFileChange} accept=".pdf,.docx" required />
+        <div className="file-input">
+          <input 
+            type="file" 
+            onChange={handleFileChange} 
+            accept=".pdf,.docx" 
+            required 
+            id="file-upload" 
+          />
+          <label htmlFor="file-upload" className="file-label">
+            {file ? file.name : 'Choose file'}
+          </label>
+        </div>
         <div className="privacy-agreement">
           <input 
             type="checkbox" 
@@ -39,7 +52,9 @@ function ResumeUpload() {
           />
           <label htmlFor="privacy-checkbox">I have read and agree to the privacy policy</label>
         </div>
-        <button type="submit" disabled={!file || !privacyAgreed}>Analyze Resume</button>
+        <button type="submit" disabled={!file || !privacyAgreed}>
+          Analyze Resume
+        </button>
       </form>
     </div>
   );
