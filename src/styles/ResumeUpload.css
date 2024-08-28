@@ -72,9 +72,9 @@ button[type="submit"]:disabled {
 }
 
 .result {
-  margin-top: 2rem;
-  padding: 1rem;
-  background-color: var(--off-white);
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #ddd;
   border-radius: 5px;
 }
 
@@ -88,4 +88,22 @@ button[type="submit"]:disabled {
 
 .result ul {
   padding-left: 20px;
+}
+
+
+.analysis-section, .structured-info {
+  margin-left: 20px;
+}
+
+.suggestions li, .matching-jobs li {
+  margin-bottom: 10px;
+}
+
+.matching-jobs li {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.matching-jobs li:last-child {
+  border-bottom: none;
 }
