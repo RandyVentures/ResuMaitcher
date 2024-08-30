@@ -70,3 +70,40 @@ button[type="submit"]:disabled {
   background-color: var(--medium-gray);
   cursor: not-allowed;
 }
+
+.result {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.result h3 {
+  color: var(--primary-black);
+}
+
+.result .error {
+  color: red;
+}
+
+.result ul {
+  padding-left: 20px;
+}
+
+
+.analysis-section, .structured-info {
+  margin-left: 20px;
+}
+
+.suggestions li, .matching-jobs li {
+  margin-bottom: 10px;
+}
+
+.matching-jobs li {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.matching-jobs li:last-child {
+  border-bottom: none;
+}
