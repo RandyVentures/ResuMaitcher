@@ -108,8 +108,8 @@ function ResumeUpload() {
           <>
             <p>Overall Score: {result.score}</p>
             
-            {/* <h4>Resume Analysis:</h4> */}
-            {/* <div className="analysis-section">
+            {<h4>Resume Analysis:</h4>}
+            {<div className="analysis-section">
               <h5>Important Terms:</h5>
               <ul>
                 {result.analysis.important_terms.map((term, index) => (
@@ -155,7 +155,7 @@ function ResumeUpload() {
                 </ul>
               </div>
             </div>
-       */}
+       }
             <h4>Suggestions:</h4>
             <ul className="suggestions">
               {result.suggestions.map((suggestion, index) => (

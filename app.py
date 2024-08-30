@@ -13,6 +13,11 @@ from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import TextConverter
 from pdfminer.layout import LAParams
 from pdfminer.pdfpage import PDFPage
+import re
+from collections import Counter
+import requests
+from urllib.parse import quote, urlparse, parse_qs, urlencode
+import json
 import os
 
 app = Flask(__name__)
@@ -20,10 +25,124 @@ CORS(app)  # This allows your React app to make requests to this Flask app
 
 RAPID_API_KEY = 'eed202bb89mshd9b21b13318f667p11f8f8jsnff35708dbead'
 
-
 nlp = spacy.load("en_core_web_sm")
 
+def get_adzuna_job_postings(query, location="", page=1, results_per_page=50):
+    app_id = "1fa58fd0"
+    app_key = "c2179fdd4d0ea1822b1864cef6d5eaeb"
+    
+    base_url = "https://api.adzuna.com/v1/api/jobs"
+    country = "us"
+    
+    # Prepare the query parameters
+    params = {
+        "app_id": app_id,
+        "app_key": app_key,
+        "results_per_page": results_per_page,
+        "what": query,
+        "content-type": "application/json"
+    }
+    
+    def make_request(where):
+        # Update the 'where' parameter
+        params["where"] = where
+        
+        # Construct the URL
+        query_string = urlencode(params)
+        url = f"{base_url}/{country}/search/{page}?{query_string}"
+        
+        print(f"Requesting URL: {url}")
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            print(f"Error fetching job postings from Adzuna: {e}")
+            return None
+    
+    # First attempt with the provided location
+    result = make_request(location)
+    
+    # If no results and location was provided, retry with "usa"
+    if result and result.get("count", 0) == 0 and location:
+        print("No results found. Retrying with location set to 'usa'...")
+        result = make_request("usa")
+    
+    return result
 
+def analyze_adzuna_jobs(adzuna_results, analysis_result):
+    if not adzuna_results or 'results' not in adzuna_results:
+        return []
+    
+    matching_jobs = []
+    resume_text = " ".join(analysis_result['important_terms'] + 
+                           analysis_result['structured_info']['skills'])
+    
+    for job in adzuna_results['results']:
+        job_text = f"{job.get('title', '')} {job.get('description', '')}"
+        
+        # Calculate match score
+        match_score = calculate_job_match_score(job_text, resume_text, analysis_result)
+        
+        #if match_score > 0.5:  # Only include jobs with a match score above 50%
+        matching_jobs.append({
+            "title": job.get('title', ''),
+            "company": job.get('company', {}).get('display_name', ''),
+            "match_score": round(match_score * 100, 2),
+            "job_link": job.get('redirect_url', ''),
+            "location": job.get('location', {}).get('display_name', ''),
+            "salary_min": job.get('salary_min', 'Not specified'),
+            "salary_max": job.get('salary_max', 'Not specified'),
+            "description": job.get('description', '')[:200] + '...'  # First 200 characters of description
+        })
+    
+    # Sort jobs by match score
+    matching_jobs.sort(key=lambda x: x['match_score'], reverse=True)
+    
+    return matching_jobs[:10]  # Return top 10 matches
+
+
+def calculate_job_match_score(job_text, resume_text, analysis_result):
+    # Calculate TF-IDF similarity
+    tfidf_similarity = calculate_similarity(resume_text, job_text)
+    
+    # Calculate skill match
+    resume_skills = set(analysis_result['structured_info']['skills'])
+    #job_skills = extract_skills(job_text)  # You'll need to implement this function
+    #skill_match_ratio = len(resume_skills.intersection(job_skills)) / len(resume_skills) if resume_skills else 0
+    
+    # Calculate experience match
+    experience_match = any(exp.lower() in job_text.lower() for exp in analysis_result['structured_info']['work_experience'])
+    
+    # Weighted score
+    score = (tfidf_similarity * 0.5) + (0.2 if experience_match else 0)
+    
+    return score
+
+
+def find_matching_jobs(analysis_result):
+    job_titles = extract_job_titles(analysis_result)
+    skills = extract_skills(analysis_result)
+    
+    # Combine job titles and skills for a more specific search
+    search_terms = job_titles[:2]
+    
+    # Join search terms with OR for a broader search
+    query = " ".join(f'"{term}"' for term in search_terms if term)
+    
+    location = clean_text(analysis_result['entities'].get('GPE', 'USA'))
+    
+    print("Extracted job titles:", job_titles)
+    print("Generated search query:", query)
+
+    adzuna_results = get_adzuna_job_postings(query, location)
+    
+    if adzuna_results:
+        matching_jobs = analyze_adzuna_jobs(adzuna_results, analysis_result)
+        return matching_jobs
+    else:
+        return []
+    
 def analyze_resume(resume_content):
     doc = nlp(resume_content)
     
@@ -54,7 +173,7 @@ def analyze_resume(resume_content):
     current_section = None
     for sent in doc.sents:
         text = sent.text.strip().lower()
-        if 'work experience' in text or 'professional experience' in text:
+        if 'work experience' in text or 'professional experience' in text or 'experience' in text:
             current_section = 'work_experience'
         elif 'education' in text:
             current_section = 'education'
@@ -71,27 +190,69 @@ def analyze_resume(resume_content):
         "structured_info": sections
     }
 
+def clean_text(text):
+    return re.sub(r'\s+', ' ', text).strip().lower()
 
-def get_job_postings(keywords, location="", page=1):
-    url = "https://jsearch.p.rapidapi.com/search"
 
-    querystring = {
-        "query": f"{' '.join(keywords)} {location}",
-        "page": str(page),
-        "num_pages": "5"
-    }
+def extract_job_titles(analysis_result):
+    common_job_titles = [
+        'engineer', 'developer', 'manager', 'analyst', 'consultant', 'designer', 
+        'coordinator', 'specialist', 'assistant', 'director', 'administrator', 
+        'supervisor', 'technician', 'representative', 'associate', 'officer',
+        'scientist', 'researcher', 'educator', 'teacher', 'professor',
+        'accountant', 'architect', 'lawyer', 'physician', 'nurse',
+        'marketing', 'sales', 'finance', 'human resources', 'operations',
+        'project manager', 'product manager', 'data scientist', 'ux designer',
+        'software engineer', 'web developer', 'systems administrator',
+        'business analyst', 'financial analyst', 'research assistant',
+        'executive assistant', 'customer service representative',
+        'graphic designer', 'content writer', 'social media manager', 'internet sales',
+        'senior software engineer', 'customer service representative', 'customer support',
+        'principal engineer', 'engineer', 'salesman', 'tech lead', 'software developer', 'software engineering manager'
+    ]
 
-    headers = {
-        "X-RapidAPI-Key": RAPID_API_KEY,
-        "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
-    }
-    
-    response = requests.get(url, headers=headers, params=querystring)
-    if response.status_code == 200:
-        return response.json().get('data', [])
-    else:
-        print(f"Error fetching job postings: {response.status_code}")
-        return []
+    full_text = clean_text(" ".join([
+        " ".join(analysis_result['structured_info']['work_experience']),
+        " ".join(analysis_result['structured_info']['education']),
+        " ".join(analysis_result['key_phrases'])
+    ]))
+
+    potential_titles = []
+    for title in common_job_titles:
+        if title in full_text:
+            potential_titles.append(title)
+            # Look for variations with seniority levels
+            for level in ['junior', 'senior', 'lead', 'principal']:
+                if f"{level} {title}" in full_text:
+                    potential_titles.append(f"{level} {title}")
+
+    # Count occurrences and get the most common titles
+    title_counts = Counter(potential_titles)
+    most_common_titles = [title for title, count in title_counts.most_common(3)]
+
+    return most_common_titles
+
+def extract_skills(analysis_result):
+    common_skills = [
+        'python', 'javascript', 'java', 'c++', 'c#', 'ruby', 'php', 'swift', 'kotlin',
+        'html', 'css', 'react', 'angular', 'vue.js', 'node.js', 'express.js', 'django',
+        'flask', 'spring', 'asp.net', 'ruby on rails',
+        'mysql', 'postgresql', 'mongodb', 'oracle', 'sql server',
+        'aws', 'azure', 'google cloud', 'docker', 'kubernetes', 'jenkins', 'git',
+        'agile', 'scrum', 'jira', 'confluence', 'rest api', 'graphql',
+        'machine learning', 'deep learning', 'tensorflow', 'pytorch', 'scikit-learn',
+        'data analysis', 'data visualization', 'tableau', 'power bi',
+        'linux', 'unix', 'windows server', 'networking', 'security'
+    ]
+
+    full_text = clean_text(" ".join([
+        " ".join(analysis_result['structured_info']['skills']),
+        " ".join(analysis_result['structured_info']['work_experience']),
+        " ".join(analysis_result['key_phrases'])
+    ]))
+
+    extracted_skills = [skill for skill in common_skills if skill in full_text]
+    return extracted_skills[:5]
 
 def preprocess_text(text):
     # Convert to lowercase and tokenize
@@ -104,63 +265,6 @@ def calculate_similarity(resume_text, job_description):
     vectorizer = TfidfVectorizer()
     tfidf_matrix = vectorizer.fit_transform([resume_text, job_description])
     return cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
-
-
-def find_matching_jobs(analysis_result):
-    important_terms = analysis_result['important_terms']
-    entities = analysis_result['entities']
-    job_titles = [phrase for phrase in analysis_result['key_phrases'] if 'engineer' in phrase.lower() or 'developer' in phrase.lower() or 'manager' in phrase.lower()]
-
-    skills = set(analysis_result['structured_info']['skills'])
-
-    keywords = list(skills) + job_titles * 2
-
-    # Extract location if available
-    #location = entities.get('GPE', '')  # GPE stands for Geopolitical Entity
-    location = analysis_result['entities'].get('GPE', '')
-
-    # Get job postings
-    job_postings = get_job_postings(important_terms[:15], location)  # Use top 5 important terms
-    
-    #job_postings = get_job_postings(keywords[:15], location, page=1)  # Increase page number for more results
-
-    # Prepare resume text for comparison
-    resume_text = " ".join(important_terms + list(entities.values()))
-    resume_text = preprocess_text(resume_text)
-    
-    matching_jobs = []
-    for job in job_postings:
-        job_description = job.get('job_description', '')
-        job_title = job.get('job_title', '')
-        company_name = job.get('employer_name', '')
-        
-        # Preprocess job description
-        processed_job_description = preprocess_text(job_description)
-        
-        # Calculate similarity
-        similarity_score = calculate_similarity(resume_text, processed_job_description)
-
-         # Add more matching criteria
-        skill_match = len(set(analysis_result['structured_info']['skills']).intersection(set(job.get('job_highlights', {}).get('Qualifications', []))))
-        experience_match = any(exp.lower() in job_description.lower() for exp in analysis_result['structured_info']['work_experience'])
-
-        # Adjust similarity score based on additional criteria
-        adjusted_score = similarity_score * 0.6 + (skill_match / 10) * 0.3 + (1 if experience_match else 0) * 0.1
-
-        matching_jobs.append({
-            "title": job_title,
-            "company": company_name,
-            "match_score": round(adjusted_score * 100, 2),
-            "job_link": job.get('job_apply_link', ''),
-            "skill_match": skill_match,
-            "experience_match": experience_match
-        })
-    
-    # Sort jobs by match score
-    matching_jobs = sorted(matching_jobs, key=lambda x: x['match_score'], reverse=True)
-    
-    return matching_jobs[:10]  # Return top 10 matches
-
 
 def generate_suggestions(analysis_result):
     suggestions = []
@@ -233,26 +337,12 @@ def process_resume():
         else:
             return jsonify({"error": "Unsupported file format. Please upload a .docx, .pdf, or .txt file."}), 400
 
-        #Extract text from the document
-        #resume_content = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-
-
         # Process the resume
         analysis_result = analyze_resume(resume_content)
 
         matching_jobs = find_matching_jobs(analysis_result)
-
         suggestions = generate_suggestions(analysis_result)
 
-        
-        # suggestions = [
-        #     "Consider adding more specific skills related to your field",
-        #     f"Your resume mentions {len(analysis_result['entities'])} named entities. Consider adding more if relevant",
-        #     "Try to incorporate more industry-specific keywords in your resume"
-        # ]
-
-
-        
         return jsonify({
             "score": analysis_result['score'],
             "suggestions": suggestions,
@@ -264,6 +354,7 @@ def process_resume():
                 "structured_info": analysis_result['structured_info']
             }
         })
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
